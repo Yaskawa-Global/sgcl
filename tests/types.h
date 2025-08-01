@@ -121,11 +121,11 @@ struct Int {
     }
 
     bool operator==(int value) const noexcept {
-        return (_value <=> value) == 0;
+        return detail::compare_three_way{}(_value, value) == detail::strong_ordering::equal;
     }
 
-    std::strong_ordering operator<=>(int value) const noexcept {
-        return (_value <=> value);
+    detail::strong_ordering compare(int value) const noexcept {
+        return detail::compare_three_way{}(_value, value);
     }
 
     inline static size_t counter = 0;

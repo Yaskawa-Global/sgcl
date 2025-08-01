@@ -9,6 +9,9 @@
 #include "tracked_ptr.h"
 
 #include <list>
+#include <iterator>
+#include <type_traits>
+#include "detail/compat.h"
 
 namespace sgcl {
     template<class T>
@@ -109,11 +112,15 @@ namespace sgcl {
             TailPtr _tail;
 
             friend bool operator==(const Iterator& lhs, const Iterator& rhs) noexcept {
-                return (lhs._node <=> rhs._node) == 0;
+                return lhs._node == rhs._node;
             }
 
-            friend std::strong_ordering operator<=>(const Iterator& lhs, const Iterator& rhs) noexcept {
-                return (lhs._node <=> rhs._node);
+            friend bool operator!=(const Iterator& lhs, const Iterator& rhs) noexcept {
+                return !(lhs == rhs);
+            }
+
+            friend detail::strong_ordering compare(const Iterator& lhs, const Iterator& rhs) noexcept {
+                return detail::compare_three_way{}(lhs._node, rhs._node);
             }
 
             template<class> friend class Iterator;
@@ -149,7 +156,7 @@ namespace sgcl {
             assign(ilist);
         }
 
-        template<std::input_iterator InputIt>
+        template<class InputIt, std::enable_if_t<!std::is_integral_v<InputIt>, int> = 0>
         list(InputIt first, InputIt last)
         : list() {
             assign(first, last);
@@ -216,7 +223,7 @@ namespace sgcl {
             }
         }
 
-        template<std::input_iterator InputIt>
+        template<class InputIt, std::enable_if_t<!std::is_integral_v<InputIt>, int> = 0>
         void assign(InputIt first, InputIt last) {
             if (first != last) {
                 size_t size = 0;
@@ -444,7 +451,7 @@ namespace sgcl {
             }
         }
 
-        template<std::input_iterator InputIt>
+        template<class InputIt, std::enable_if_t<!std::is_integral_v<InputIt>, int> = 0>
         iterator insert(const const_iterator& pos, InputIt first, InputIt last) {
             if (first == last) {
                 return iterator(pos._node, pos._tail);
@@ -894,22 +901,27 @@ namespace sgcl {
             return true;
         }
 
-        friend std::compare_three_way_result_t<T> operator<=>(const list<T>& lhs, const list<T>& rhs) noexcept {
+        friend bool operator!=(const list<T>& lhs, const list<T>& rhs) noexcept {
+            return !(lhs == rhs);
+        }
+
+        friend detail::compare_three_way_result_t<T> compare(const list<T>& lhs, const list<T>& rhs) noexcept {
             auto it1 = lhs.begin();
             auto it2 = rhs.begin();
             auto lend = lhs.end();
             auto rend = rhs.end();
-            for (; it1 != lend; ++it1, ++it2) {
-                if (auto cmp = (*it1 <=> *it2); cmp != 0)
+            for (; it1 != lend && it2 != rend; ++it1, ++it2) {
+                auto cmp = detail::compare_three_way{}(*it1, *it2);
+                if (cmp != detail::strong_ordering::equal)
                     return cmp;
             }
             if (lhs.size() < rhs.size()) {
-                return std::strong_ordering::less;
+                return detail::strong_ordering::less;
             }
             if (lhs.size() > rhs.size()) {
-                return std::strong_ordering::greater;
+                return detail::strong_ordering::greater;
             }
-            return std::strong_ordering::equal;
+            return detail::strong_ordering::equal;
         }
     };
 

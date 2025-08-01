@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <future>
+#include <optional>
 #include <iostream>
 
 template<typename T>
@@ -12,7 +13,9 @@ class LockFreeStack {
     struct Node {
         T data;
         NodePtr next;
-    };    
+        Node() = default;
+        explicit Node(T d) : data(std::move(d)) {}
+    };
     sgcl::atomic<NodePtr> _head;
 
 public:

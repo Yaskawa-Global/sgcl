@@ -6,6 +6,7 @@
 #pragma once
 
 #include "tracked_ptr.h"
+#include "detail/compat.h"
 
 namespace sgcl {
     template<class T>
@@ -56,7 +57,7 @@ namespace sgcl {
 
         value_type load(const std::memory_order m = std::memory_order_seq_cst) const noexcept {
             auto& thread = detail::current_thread();
-            std::memory_order order = m > std::memory_order::acquire ? m : std::memory_order::acquire;
+            std::memory_order order = m > std::memory_order_acquire ? m : std::memory_order_acquire;
             auto l = (T*)_ptr().load(order);
             T* t;
             do {
@@ -154,19 +155,19 @@ namespace sgcl {
         }
 
         void notify_one() noexcept {
-            _ptr().notify_one();
+            detail::atomic_notify_one(_ptr());
         }
 
         void notify_all() noexcept {
-            _ptr().notify_all();
+            detail::atomic_notify_all(_ptr());
         }
 
         void wait(std::nullptr_t, std::memory_order m = std::memory_order_seq_cst) const noexcept {
-            _ptr().wait(nullptr, m);
+            detail::atomic_wait(_ptr(), nullptr);
         }
 
         void wait(value_type p, std::memory_order m = std::memory_order_seq_cst) const noexcept {
-            _ptr().wait(p.get(), m);
+            detail::atomic_wait(_ptr(), p.get());
         }
 
     private:

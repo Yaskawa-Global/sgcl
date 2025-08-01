@@ -6,6 +6,7 @@
 #pragma once
 
 #include <iterator>
+#include "compat.h"
 
 namespace sgcl::detail {
     template<class T>
@@ -86,19 +87,27 @@ namespace sgcl::detail {
         }
 
         bool operator==(const ArrayIterator<std::remove_cv_t<T>>& other) const noexcept {
-            return (_ptr <=> other._ptr) == 0;
+            return _ptr == other._ptr;
         }
 
-        std::strong_ordering operator<=>(const ArrayIterator<std::remove_cv_t<T>>& other) const noexcept {
-            return (_ptr <=> other._ptr);
+        bool operator!=(const ArrayIterator<std::remove_cv_t<T>>& other) const noexcept {
+            return !(*this == other);
+        }
+
+        detail::strong_ordering compare(const ArrayIterator<std::remove_cv_t<T>>& other) const noexcept {
+            return detail::compare_three_way{}(_ptr, other._ptr);
         }
 
         bool operator==(const ArrayIterator<const std::remove_cv_t<T>>& other) const noexcept {
-            return (_ptr <=> other._ptr) == 0;
+            return _ptr == other._ptr;
         }
 
-        std::strong_ordering operator<=>(const ArrayIterator<const std::remove_cv_t<T>>& other) const noexcept {
-            return (_ptr <=> other._ptr);
+        bool operator!=(const ArrayIterator<const std::remove_cv_t<T>>& other) const noexcept {
+            return !(*this == other);
+        }
+
+        detail::strong_ordering compare(const ArrayIterator<const std::remove_cv_t<T>>& other) const noexcept {
+            return detail::compare_three_way{}(_ptr, other._ptr);
         }
 
         reverse_iterator make_reverse_iterator() const noexcept {

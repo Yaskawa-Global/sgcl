@@ -7,6 +7,7 @@
 
 #include "array_metadata.h"
 #include "thread.h"
+#include "compat.h"
 
 namespace sgcl::detail {
     class Pointer {
@@ -135,15 +136,15 @@ namespace sgcl::detail {
         }
 
         void notify_one() noexcept {
-            _ptr.notify_one();
+            detail::atomic_notify_one(_ptr);
         }
 
         void notify_all() noexcept {
-            _ptr.notify_all();
+            detail::atomic_notify_all(_ptr);
         }
 
         void wait(const void* p, std::memory_order m) const noexcept {
-            _ptr.wait(const_cast<void*>(p), m);
+            detail::atomic_wait(_ptr, const_cast<void*>(p));
         }
 
         inline static void* base_address_of(const void* p) noexcept {

@@ -10,6 +10,9 @@
 #include "tracked_ptr.h"
 
 #include <vector>
+#include <iterator>
+#include <type_traits>
+#include "detail/compat.h"
 
 namespace sgcl {
     template<class T>
@@ -105,8 +108,28 @@ namespace sgcl {
                 return lhs._ptr == rhs._ptr;
             }
 
-            friend std::strong_ordering operator<=>(const Iterator& lhs, const Iterator& rhs) noexcept {
-                return lhs._ptr <=> rhs._ptr;
+            friend bool operator!=(const Iterator& lhs, const Iterator& rhs) noexcept {
+                return !(lhs == rhs);
+            }
+
+            friend bool operator<(const Iterator& lhs, const Iterator& rhs) noexcept {
+                return lhs._ptr < rhs._ptr;
+            }
+
+            friend bool operator<=(const Iterator& lhs, const Iterator& rhs) noexcept {
+                return lhs._ptr <= rhs._ptr;
+            }
+
+            friend bool operator>(const Iterator& lhs, const Iterator& rhs) noexcept {
+                return lhs._ptr > rhs._ptr;
+            }
+
+            friend bool operator>=(const Iterator& lhs, const Iterator& rhs) noexcept {
+                return lhs._ptr >= rhs._ptr;
+            }
+
+            friend detail::strong_ordering compare(const Iterator& lhs, const Iterator& rhs) noexcept {
+                return detail::compare_three_way{}(lhs._ptr, rhs._ptr);
             }
 
             template<class> friend class Iterator;
@@ -129,7 +152,8 @@ namespace sgcl {
         , _capacity(nullptr) {
         }
 
-        explicit vector(size_t count) requires std::default_initializable<T>
+        template<class Q = T, std::enable_if_t<std::is_default_constructible_v<Q>, int> = 0>
+        explicit vector(size_t count)
         : vector() {
             if (count) {
                 _make(count);
@@ -146,7 +170,7 @@ namespace sgcl {
             assign(ilist);
         }
 
-        template<std::input_iterator InputIt>
+        template<class InputIt, std::enable_if_t<!std::is_integral_v<InputIt>, int> = 0>
         vector(InputIt first, InputIt last)
         : vector() {
             assign(first, last);
@@ -245,7 +269,7 @@ namespace sgcl {
             }
         }
 
-        template<std::input_iterator InputIt>
+        template<class InputIt, std::enable_if_t<!std::is_integral_v<InputIt>, int> = 0>
         void assign(InputIt first, InputIt last) {
             if (first != last) {
                 size_t n = _distance(first, last);
@@ -450,7 +474,7 @@ namespace sgcl {
             return iterator(ptr);
         }
 
-        template<std::input_iterator InputIt>
+        template<class InputIt, std::enable_if_t<!std::is_integral_v<InputIt>, int> = 0>
         iterator insert(const_iterator pos, InputIt first, InputIt last) {
             auto index = pos - begin();
             if (first == last) {
@@ -491,7 +515,8 @@ namespace sgcl {
             return iterator(begin() + index);
         }
 
-        void resize(size_type count) requires std::default_initializable<T> {
+        template<class Q = T, std::enable_if_t<std::is_default_constructible_v<Q>, int> = 0>
+        void resize(size_type count) {
             resize(count, T());
         }
 
@@ -535,7 +560,7 @@ namespace sgcl {
         size_t* _size;
         const size_t* _capacity;
 
-        template<std::input_iterator InputIt>
+        template<class InputIt, std::enable_if_t<!std::is_integral_v<InputIt>, int> = 0>
         size_t _distance(InputIt first, InputIt last) const noexcept {
             auto distance = std::distance(first, last);
             return distance > 0 ? distance : 0;
@@ -547,7 +572,8 @@ namespace sgcl {
             _capacity = detail::Pointer::capacity_ptr(_ptr.get());
         }
 
-        void _make(size_t n) requires std::default_initializable<T> {
+        template<class Q = T, std::enable_if_t<std::is_default_constructible_v<Q>, int> = 0>
+        void _make(size_t n) {
             _ptr = make_tracked<T[]>(n);
             _size = detail::Pointer::size_ptr(_ptr.get());
             _capacity = detail::Pointer::capacity_ptr(_ptr.get());
@@ -663,11 +689,15 @@ namespace sgcl {
             return std::equal(lhs.begin(), lhs.end(), rhs.begin());
         }
 
-        friend std::strong_ordering operator<=>(const vector<T>& lhs, const vector<T>& rhs) {
-            return std::lexicographical_compare_three_way(
+        friend bool operator!=(const vector<T>& lhs, const vector<T>& rhs) {
+            return !(lhs == rhs);
+        }
+
+        friend detail::strong_ordering compare(const vector<T>& lhs, const vector<T>& rhs) {
+            return detail::lexicographical_compare_three_way(
                 lhs.begin(), lhs.end(),
                 rhs.begin(), rhs.end(),
-                std::compare_three_way{}
+                detail::compare_three_way{}
             );
         }
     };

@@ -2,6 +2,7 @@
 
 #include <iostream>
 
+using sgcl::static_pointer_cast;
 int main() {
     // Creating object on the managed heap
     // Note: 'make_tracked' returns a unique pointer
@@ -26,7 +27,7 @@ int main() {
     struct Faz {
         int value;
     };
-    sgcl::tracked_ptr faz = sgcl::make_tracked<Faz>(12);
+    sgcl::tracked_ptr faz = sgcl::make_tracked<Faz>();
     sgcl::tracked_ptr faz_value(&faz->value);
     std::cout << "Faz::value: " << *faz_value << std::endl;
 

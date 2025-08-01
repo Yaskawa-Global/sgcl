@@ -9,6 +9,7 @@
 #include "detail/pointer.h"
 #include "detail/tracked.h"
 #include "make_tracked.h"
+#include "detail/compat.h"
 #include "unique_ptr.h"
 #include "types.h"
 
@@ -261,7 +262,8 @@ namespace sgcl {
         }
 
     protected:
-        static constexpr auto _set_flag(auto p, uintptr_t f) noexcept {
+        template<class Ptr>
+        static constexpr Ptr _set_flag(Ptr p, uintptr_t f) noexcept {
 #ifdef SGCL_ARCH_X86_64
             assert(!((uintptr_t)p & ~ClearMask) && "Cannot use SGCL_ARCH_X86_64");
 #endif
@@ -269,9 +271,10 @@ namespace sgcl {
             return (decltype(p))v;
         }
 
-        static constexpr auto _remove_flags(auto p) noexcept {
+        template<class Ptr>
+        static constexpr Ptr _remove_flags(Ptr p) noexcept {
             auto v = (uintptr_t)p & ClearMask;
-            return (decltype(p))v;
+            return (Ptr)v;
         }
 
         constexpr bool this_on_stack() const noexcept {
@@ -373,34 +376,115 @@ namespace sgcl {
     tracked_ptr(unique_ptr<T>&&) -> tracked_ptr<T>;
 
     template<class T, class U>
-    inline std::strong_ordering operator<=>(const tracked_ptr<T>& l, const tracked_ptr<U>& r) noexcept {
+    inline detail::strong_ordering compare(const tracked_ptr<T>& l, const tracked_ptr<U>& r) noexcept {
         using Y = typename std::common_type<decltype(l.get()), decltype(r.get())>::type;
-        return static_cast<Y>(l.get()) <=> static_cast<Y>(r.get());
+        return detail::compare_three_way{}(static_cast<Y>(l.get()), static_cast<Y>(r.get()));
     }
 
     template<class T, class U>
     inline bool operator==(const tracked_ptr<T>& l, const tracked_ptr<U>& r) noexcept {
-        return (l <=> r) == 0;
+        return compare(l, r) == detail::strong_ordering::equal;
+    }
+
+    template<class T, class U>
+    inline bool operator!=(const tracked_ptr<T>& l, const tracked_ptr<U>& r) noexcept {
+        return !(l == r);
+    }
+
+    template<class T, class U>
+    inline bool operator<(const tracked_ptr<T>& l, const tracked_ptr<U>& r) noexcept {
+        return compare(l, r) == detail::strong_ordering::less;
+    }
+
+    template<class T, class U>
+    inline bool operator<=(const tracked_ptr<T>& l, const tracked_ptr<U>& r) noexcept {
+        auto c = compare(l, r);
+        return c == detail::strong_ordering::less || c == detail::strong_ordering::equal;
+    }
+
+    template<class T, class U>
+    inline bool operator>(const tracked_ptr<T>& l, const tracked_ptr<U>& r) noexcept {
+        return compare(l, r) == detail::strong_ordering::greater;
+    }
+
+    template<class T, class U>
+    inline bool operator>=(const tracked_ptr<T>& l, const tracked_ptr<U>& r) noexcept {
+        auto c = compare(l, r);
+        return c == detail::strong_ordering::greater || c == detail::strong_ordering::equal;
     }
 
     template<class T>
-    inline std::strong_ordering operator<=>(const tracked_ptr<T>& l, std::nullptr_t) noexcept {
-        return l.get() <=> static_cast<decltype(l.get())>(nullptr);
+    inline detail::strong_ordering compare(const tracked_ptr<T>& l, std::nullptr_t) noexcept {
+        return detail::compare_three_way{}(l.get(), static_cast<decltype(l.get())>(nullptr));
     }
 
     template<class T>
     inline bool operator==(const tracked_ptr<T>& l, std::nullptr_t) noexcept {
-        return (l <=> nullptr) == 0;
+        return compare(l, nullptr) == detail::strong_ordering::equal;
     }
 
     template<class T>
-    inline std::strong_ordering operator<=>(std::nullptr_t, const tracked_ptr<T>& r) noexcept {
-        return static_cast<decltype(r.get())>(nullptr) <=> r.get();
+    inline bool operator!=(const tracked_ptr<T>& l, std::nullptr_t) noexcept {
+        return !(l == nullptr);
+    }
+
+    template<class T>
+    inline bool operator<(const tracked_ptr<T>& l, std::nullptr_t) noexcept {
+        return compare(l, nullptr) == detail::strong_ordering::less;
+    }
+
+    template<class T>
+    inline bool operator<=(const tracked_ptr<T>& l, std::nullptr_t) noexcept {
+        auto c = compare(l, nullptr);
+        return c == detail::strong_ordering::less || c == detail::strong_ordering::equal;
+    }
+
+    template<class T>
+    inline bool operator>(const tracked_ptr<T>& l, std::nullptr_t) noexcept {
+        return compare(l, nullptr) == detail::strong_ordering::greater;
+    }
+
+    template<class T>
+    inline bool operator>=(const tracked_ptr<T>& l, std::nullptr_t) noexcept {
+        auto c = compare(l, nullptr);
+        return c == detail::strong_ordering::greater || c == detail::strong_ordering::equal;
+    }
+
+    template<class T>
+    inline detail::strong_ordering compare(std::nullptr_t, const tracked_ptr<T>& r) noexcept {
+        return detail::compare_three_way{}(static_cast<decltype(r.get())>(nullptr), r.get());
     }
 
     template<class T>
     inline bool operator==(std::nullptr_t, const tracked_ptr<T>& r) noexcept {
-        return (nullptr <=> r) == 0;
+        return compare(nullptr, r) == detail::strong_ordering::equal;
+    }
+
+    template<class T>
+    inline bool operator!=(std::nullptr_t, const tracked_ptr<T>& r) noexcept {
+        return !(nullptr == r);
+    }
+
+    template<class T>
+    inline bool operator<(std::nullptr_t, const tracked_ptr<T>& r) noexcept {
+        return compare(nullptr, r) == detail::strong_ordering::less;
+    }
+
+    template<class T>
+    inline bool operator<=(std::nullptr_t, const tracked_ptr<T>& r) noexcept {
+        auto c = compare(nullptr, r);
+        return c == detail::strong_ordering::less || c == detail::strong_ordering::equal;
+    }
+
+    template<class T>
+    inline bool operator>(std::nullptr_t, const tracked_ptr<T>& r) noexcept {
+        return compare(nullptr, r) == detail::strong_ordering::greater;
+    }
+
+    template<class T>
+    inline bool operator>=(std::nullptr_t, const tracked_ptr<T>& r) noexcept {
+        auto c = compare(nullptr, r);
+        return c == detail::strong_ordering::greater || c == detail::strong_ordering::equal;
     }
 
     template<class T, class U>

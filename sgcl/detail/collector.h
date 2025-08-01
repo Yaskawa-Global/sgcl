@@ -8,6 +8,7 @@
 #include "child_pointers.h"
 #include "thread.h"
 #include "types.h"
+#include "compat.h"
 
 #include <condition_variable>
 #include <functional>
@@ -122,7 +123,7 @@ namespace sgcl::detail {
                 for (unsigned index = 0; index < childs.map.size(); ++index) {
                     auto flags = childs.map[index].load(std::memory_order_relaxed);
                     while(flags) {
-                        auto i = std::countr_zero(flags);
+                        auto i = detail::countr_zero(flags);
                         auto offset = index * 8 + i;
                         childs.offsets->emplace_back(offset);
                         flags &= flags - 1;
@@ -238,7 +239,7 @@ namespace sgcl::detail {
                             auto object_count = page->metadata->object_count;
                             bool last = (i == count - 1);
                             while(unregistered) {
-                                auto countr_zero = std::countr_zero(unregistered);
+                                auto countr_zero = detail::countr_zero(unregistered);
                                 auto index = offset + countr_zero;
                                 if (!last || index < object_count) {
                                     auto state = states[index].load(std::memory_order_relaxed);
@@ -275,7 +276,7 @@ namespace sgcl::detail {
                         auto registered = flags[i].registered;
                         auto offset = i * Page::FlagBitCount;
                         while(registered) {
-                            auto index = offset + std::countr_zero(registered);
+                            auto index = offset + detail::countr_zero(registered);
                             auto state = states[index].load(std::memory_order_relaxed);
                             if (state == State::Reachable) {
                                 states[index].store(State::Used, std::memory_order_relaxed);
@@ -354,7 +355,7 @@ namespace sgcl::detail {
             for (unsigned index = 0; index < map.size(); ++index) {
                 auto flags = map[index].load(std::memory_order_relaxed);
                 while(flags) {
-                    auto i = std::countr_zero(flags);
+                    auto i = detail::countr_zero(flags);
                     auto offset = index * 8 + i;
                     auto ap = (RawPointer*)ptr + offset;
                     auto p = ap->load(std::memory_order_relaxed);
@@ -415,7 +416,7 @@ namespace sgcl::detail {
                             auto reachable = flag.reachable;
                             auto offset = i * Page::FlagBitCount;
                             while(reachable) {
-                                auto countr_zero = std::countr_zero(reachable);
+                                auto countr_zero = detail::countr_zero(reachable);
                                 auto mask = Page::Flag(1) << countr_zero;
                                 flag.marked |= mask;
                                 auto index = offset + countr_zero;
@@ -461,7 +462,7 @@ namespace sgcl::detail {
                         auto unreachable = flag.registered & ~flag.marked;
                         auto offset = i * Page::FlagBitCount;
                         while(unreachable) {
-                            auto countr_zero = std::countr_zero(unreachable);
+                            auto countr_zero = detail::countr_zero(unreachable);
                             auto index = offset + countr_zero;
                             auto state = states[index].load(std::memory_order_relaxed);
                             if (state & State::ReachableMask) {
@@ -518,7 +519,7 @@ namespace sgcl::detail {
             for (unsigned index = 0; index < map.size(); ++index) {
                 auto flags = map[index].load(std::memory_order_relaxed);
                 while(flags) {
-                    auto i = std::countr_zero(flags);
+                    auto i = detail::countr_zero(flags);
                     auto offset = index * 8 + i;
                     auto p = (RawPointer*)ptr + offset;
                     p->store(nullptr, std::memory_order_relaxed);
@@ -596,7 +597,7 @@ namespace sgcl::detail {
                     if (unreachable) {
                         page->unused_occur.store(true, std::memory_order_relaxed);
                         do {
-                            auto countr_zero = std::countr_zero(unreachable);
+                            auto countr_zero = detail::countr_zero(unreachable);
                             auto index = offset + countr_zero;
                             auto state = states[index].load(std::memory_order_relaxed);
                             assert(state < State::Reachable || state > State::UniqueLock);
@@ -804,7 +805,7 @@ namespace sgcl::detail {
 #endif
             if (_terminating) {
                 _terminated = true;
-                _terminated.notify_all();
+                detail::atomic_notify_all(_terminated);
             }
         }
 
@@ -823,7 +824,7 @@ namespace sgcl::detail {
                     _terminating.store(true);
                     waking_up();
                 }
-                _terminated.wait(false);
+                detail::atomic_wait(_terminated, false);
             }
         }
 

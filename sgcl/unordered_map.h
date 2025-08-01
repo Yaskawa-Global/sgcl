@@ -9,15 +9,23 @@
 #include "tracked_ptr.h"
 
 #include <cmath>
+#include <type_traits>
 #include <unordered_map>
 
 namespace sgcl {
     namespace detail {
+        template <typename K, typename Key, typename Hash, typename KeyEqual, typename = void>
+        struct HashableWith : std::false_type {};
+
         template <typename K, typename Key, typename Hash, typename KeyEqual>
-        concept HashableWith = requires(const Hash& h, const KeyEqual& eq, const Key& k, const K& x) {
-            { h(x) } -> std::convertible_to<std::size_t>;
-            { eq(k, x) } -> std::convertible_to<bool>;
-        };
+        struct HashableWith<K, Key, Hash, KeyEqual,
+            std::void_t<
+                decltype(std::declval<Hash>()(std::declval<const K&>())),
+                decltype(std::declval<KeyEqual>()(std::declval<const Key&>(), std::declval<const K&>()))>> :
+            std::bool_constant<
+                std::is_convertible_v<decltype(std::declval<Hash>()(std::declval<const K&>())), std::size_t> &&
+                std::is_convertible_v<decltype(std::declval<KeyEqual>()(std::declval<const Key&>(), std::declval<const K&>())), bool>
+            > {};
     }
 
     template<class Key, class T, class Hash = std::hash<Key>, class KeyEqual = std::equal_to<Key>>
@@ -28,6 +36,10 @@ namespace sgcl {
         struct Node {
             std::pair<const Key, T> p;
             NodePtr next;
+
+            Node() = default;
+            Node(std::pair<const Key, T> pair, NodePtr n = {})
+            : p(std::move(pair)), next(std::move(n)) {}
         };
 
         template <bool IsConst>
@@ -316,7 +328,7 @@ namespace sgcl {
             return { iterator(this, idx, _buckets[idx]), true };
         }
 
-        template <typename P> requires std::constructible_from<value_type, P>
+        template <typename P, std::enable_if_t<std::is_constructible_v<value_type, P>, int> = 0>
         std::pair<iterator, bool> insert(P&& p) {
             return insert(value_type(std::forward<P>(p)));
         }
@@ -534,7 +546,7 @@ namespace sgcl {
             return 0;
         }
 
-        template<class K> requires detail::HashableWith<K, Key, Hash, KeyEqual>
+        template<class K, std::enable_if_t<detail::HashableWith<K, Key, Hash, KeyEqual>::value, int> = 0>
         size_t erase(K&& x) {
             if (_buckets.size()) {
                 size_t idx = _hash(x) % _buckets.size();
@@ -571,7 +583,7 @@ namespace sgcl {
             return end();
         }
 
-        template<class K> requires detail::HashableWith<K, Key, Hash, KeyEqual>
+        template<class K, std::enable_if_t<detail::HashableWith<K, Key, Hash, KeyEqual>::value, int> = 0>
         iterator find(const K& x) noexcept {
             if (_buckets.size()) {
                 size_t idx = _hash(x) % _buckets.size();
@@ -600,7 +612,7 @@ namespace sgcl {
             return end();
         }
 
-        template<class K> requires detail::HashableWith<K, Key, Hash, KeyEqual>
+        template<class K, std::enable_if_t<detail::HashableWith<K, Key, Hash, KeyEqual>::value, int> = 0>
         const_iterator find(const K& x) const noexcept {
             if (_buckets.size()) {
                 size_t idx = _hash(x) % _buckets.size();
@@ -619,7 +631,7 @@ namespace sgcl {
             return find(key) != end();
         }
 
-        template<class K> requires detail::HashableWith<K, Key, Hash, KeyEqual>
+        template<class K, std::enable_if_t<detail::HashableWith<K, Key, Hash, KeyEqual>::value, int> = 0>
         size_t count(const K& x) const noexcept {
             return find(x) != end();
         }
@@ -638,7 +650,7 @@ namespace sgcl {
             return false;
         }
 
-        template<class K> requires detail::HashableWith<K, Key, Hash, KeyEqual>
+        template<class K, std::enable_if_t<detail::HashableWith<K, Key, Hash, KeyEqual>::value, int> = 0>
         bool contains(const K& x) const noexcept {
             return find(x) != end();
         }
@@ -655,14 +667,14 @@ namespace sgcl {
                                : std::make_pair(it, std::next(it));
         }
 
-        template <typename K> requires detail::HashableWith<K, Key, Hash, KeyEqual>
+        template <typename K, std::enable_if_t<detail::HashableWith<K, Key, Hash, KeyEqual>::value, int> = 0>
         std::pair<iterator, iterator> equal_range(const K& x) noexcept {
             iterator it = find(x);
             return it == end() ? std::make_pair(it, it)
                                : std::make_pair(it, std::next(it));
         }
 
-        template <typename K> requires detail::HashableWith<K, Key, Hash, KeyEqual>
+        template <typename K, std::enable_if_t<detail::HashableWith<K, Key, Hash, KeyEqual>::value, int> = 0>
         std::pair<const_iterator, const_iterator> equal_range(const K& x) const noexcept {
             const_iterator it = find(x);
             return it == end() ? std::make_pair(it, it)

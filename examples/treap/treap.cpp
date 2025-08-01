@@ -12,6 +12,8 @@ class Treap {
         const int y = rand();
         NodePtr left;
         NodePtr right;
+
+        explicit Node(int xv) : x(xv) {}
     };
 
 public:
