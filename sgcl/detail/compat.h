@@ -2,9 +2,12 @@
 
 #if __cplusplus < 202002L
 #include <atomic>
-#include <thread>
 #include <type_traits>
 #include <climits>
+#include <condition_variable>
+#include <mutex>
+#include <unordered_map>
+#include <memory>
 
 namespace sgcl::detail {
     // minimal std::strong_ordering replacement
@@ -33,11 +36,48 @@ namespace sgcl::detail {
         return (f1 == l1) ? strong_ordering::less : strong_ordering::greater;
     }
 
-    // basic spin-wait implementation for atomic wait/notify
+    struct wait_state {
+        std::mutex mtx;
+        std::condition_variable cv;
+        std::size_t waiters = 0;
+    };
+
+    inline std::unordered_map<void*, std::shared_ptr<wait_state>>& wait_map() {
+        static std::unordered_map<void*, std::shared_ptr<wait_state>> m;
+        return m;
+    }
+
+    inline std::mutex& wait_map_mutex() {
+        static std::mutex m;
+        return m;
+    }
+
+    // condition_variable based implementation for atomic wait/notify
     template<class Atomic, class T>
     void atomic_wait(Atomic& a, T old) noexcept {
+        if (a.load(std::memory_order_acquire) != old) return;
+
+        void* key = const_cast<void*>(static_cast<const void*>(&a));
+        std::shared_ptr<wait_state> ws;
+        {
+            std::lock_guard<std::mutex> lg(wait_map_mutex());
+            auto& ptr = wait_map()[key];
+            if (!ptr) ptr = std::make_shared<wait_state>();
+            ws = ptr;
+            ++ws->waiters;
+        }
+
+        std::unique_lock<std::mutex> lk(ws->mtx);
         while (a.load(std::memory_order_acquire) == old) {
-            std::this_thread::yield();
+            ws->cv.wait(lk);
+        }
+        lk.unlock();
+
+        {
+            std::lock_guard<std::mutex> lg(wait_map_mutex());
+            if (--ws->waiters == 0) {
+                wait_map().erase(key);
+            }
         }
     }
 
@@ -52,11 +92,29 @@ namespace sgcl::detail {
     }
 
     template<class Atomic>
-    void atomic_notify_one(Atomic&) noexcept {
+    void atomic_notify_one(Atomic& a) noexcept {
+        void* key = const_cast<void*>(static_cast<const void*>(&a));
+        std::shared_ptr<wait_state> ws;
+        {
+            std::lock_guard<std::mutex> lg(wait_map_mutex());
+            auto it = wait_map().find(key);
+            if (it == wait_map().end()) return;
+            ws = it->second;
+        }
+        ws->cv.notify_one();
     }
 
     template<class Atomic>
-    void atomic_notify_all(Atomic&) noexcept {
+    void atomic_notify_all(Atomic& a) noexcept {
+        void* key = const_cast<void*>(static_cast<const void*>(&a));
+        std::shared_ptr<wait_state> ws;
+        {
+            std::lock_guard<std::mutex> lg(wait_map_mutex());
+            auto it = wait_map().find(key);
+            if (it == wait_map().end()) return;
+            ws = it->second;
+        }
+        ws->cv.notify_all();
     }
 }
 
