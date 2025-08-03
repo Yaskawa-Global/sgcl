@@ -163,11 +163,11 @@ namespace sgcl {
         }
 
         void wait(std::nullptr_t, std::memory_order m = std::memory_order_seq_cst) const noexcept {
-            detail::atomic_wait(_ptr(), nullptr);
+            detail::atomic_wait(_ptr(), nullptr, m);
         }
 
         void wait(value_type p, std::memory_order m = std::memory_order_seq_cst) const noexcept {
-            detail::atomic_wait(_ptr(), p.get());
+            detail::atomic_wait(_ptr(), p.get(), m);
         }
 
     private:

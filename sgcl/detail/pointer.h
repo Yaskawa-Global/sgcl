@@ -144,7 +144,7 @@ namespace sgcl::detail {
         }
 
         void wait(const void* p, std::memory_order m) const noexcept {
-            detail::atomic_wait(_ptr, const_cast<void*>(p));
+            detail::atomic_wait(_ptr, const_cast<void*>(p), m);
         }
 
         inline static void* base_address_of(const void* p) noexcept {
