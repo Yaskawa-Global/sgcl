@@ -54,8 +54,8 @@ namespace sgcl::detail {
 
     // condition_variable based implementation for atomic wait/notify
     template<class Atomic, class T>
-    void atomic_wait(Atomic& a, T old) noexcept {
-        if (a.load(std::memory_order_acquire) != old) return;
+    void atomic_wait(Atomic& a, T old, std::memory_order order = std::memory_order_seq_cst) noexcept {
+        if (a.load(order) != old) return;
 
         void* key = const_cast<void*>(static_cast<const void*>(&a));
         std::shared_ptr<wait_state> ws;
@@ -68,7 +68,7 @@ namespace sgcl::detail {
         }
 
         std::unique_lock<std::mutex> lk(ws->mtx);
-        while (a.load(std::memory_order_acquire) == old) {
+        while (a.load(order) == old) {
             ws->cv.wait(lk);
         }
         lk.unlock();
@@ -83,6 +83,7 @@ namespace sgcl::detail {
 
     template<class T>
     constexpr int countr_zero(T v) noexcept {
+        static_assert(std::is_unsigned_v<T>, "countr_zero requires unsigned type");
         int c = 0;
         while (v && !(v & 1)) {
             v >>= 1;
@@ -120,6 +121,7 @@ namespace sgcl::detail {
 
 #else
 #include <compare>
+#include <atomic>
 namespace sgcl::detail {
     using std::strong_ordering;
     using std::compare_three_way;
@@ -128,7 +130,7 @@ namespace sgcl::detail {
     using compare_three_way_result_t = std::compare_three_way_result_t<T, U>;
     using std::countr_zero;
     template<class Atomic, class T>
-    inline void atomic_wait(Atomic& a, T old) noexcept { a.wait(old); }
+    inline void atomic_wait(Atomic& a, T old, std::memory_order order = std::memory_order_seq_cst) noexcept { a.wait(old, order); }
     template<class Atomic>
     inline void atomic_notify_one(Atomic& a) noexcept { a.notify_one(); }
     template<class Atomic>
