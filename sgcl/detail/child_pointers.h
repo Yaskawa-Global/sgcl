@@ -17,7 +17,7 @@ namespace sgcl::detail {
         using Map = std::vector<std::atomic<uint8_t>>;
         using Vector = std::vector<ptrdiff_t>;
 
-        constexpr ChildPointers(bool f, size_t object_size) noexcept
+        ChildPointers(bool f, size_t object_size) noexcept
         : final(f)
         , map(f ? 0 : (object_size + sizeof(RawPointer) * 8 - 1) / (sizeof(RawPointer) * 8)) {
         };
