@@ -1,6 +1,10 @@
 # SGCL
+
 ## About SGCL
 SGCL (Smart Garbage Collection Library) is an advanced memory management library for C++ designed with performance and ease of use in mind. SGCL introduces fully tracked smart pointers, providing an experience similar to shared_ptr, but with additional automatic garbage collection and optimization mechanisms. Aligned with modern C++ standards (C++20 and later), SGCL aims to facilitate safer and more efficient memory management without the overhead typically associated with garbage collection techniques.
+
+**Note:** This is a backport to C++17, whereas the main line requires C++20.
+
 ## Why SGCL?
 
 SGCL was created to address specific scenarios where `unique_ptr` and `shared_ptr` fail. These standard smart pointers are versatile, but may not be the optimal choice for complex applications. Here's why SGCL could be a game-changer:
@@ -214,7 +218,7 @@ std::cout << "live object count: " << live_object_count << std::endl;
 sgcl::collector::terminate();
 ```
 ## Dependencies
-This library is written in C++20 and a compliant compiler is necessary. 
+This library is written in C++17 and a compliant compiler is necessary. 
 
 No external library is necessary and there are no other requirements.
 ## Usage
