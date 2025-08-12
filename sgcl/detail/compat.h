@@ -8,6 +8,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <memory>
+#include <cstdint>
 
 namespace sgcl::detail {
     // minimal std::strong_ordering replacement
@@ -42,14 +43,17 @@ namespace sgcl::detail {
         std::size_t waiters = 0;
     };
 
-    inline std::unordered_map<void*, std::shared_ptr<wait_state>>& wait_map() {
-        static std::unordered_map<void*, std::shared_ptr<wait_state>> m;
-        return m;
-    }
+    struct wait_bucket {
+        std::mutex mtx;
+        std::unordered_map<void*, std::shared_ptr<wait_state>> map;
+    };
 
-    inline std::mutex& wait_map_mutex() {
-        static std::mutex m;
-        return m;
+    constexpr std::size_t wait_bucket_count = 256;
+
+    inline wait_bucket& wait_bucket_for(void* key) {
+        static wait_bucket buckets[wait_bucket_count];
+        auto idx = (reinterpret_cast<std::uintptr_t>(key) >> 3) % wait_bucket_count;
+        return buckets[idx];
     }
 
     // condition_variable based implementation for atomic wait/notify
@@ -58,10 +62,11 @@ namespace sgcl::detail {
         if (a.load(order) != old) return;
 
         void* key = const_cast<void*>(static_cast<const void*>(&a));
+        auto& bucket = wait_bucket_for(key);
         std::shared_ptr<wait_state> ws;
         {
-            std::lock_guard<std::mutex> lg(wait_map_mutex());
-            auto& ptr = wait_map()[key];
+            std::lock_guard<std::mutex> lg(bucket.mtx);
+            auto& ptr = bucket.map[key];
             if (!ptr) ptr = std::make_shared<wait_state>();
             ws = ptr;
             ++ws->waiters;
@@ -74,9 +79,9 @@ namespace sgcl::detail {
         lk.unlock();
 
         {
-            std::lock_guard<std::mutex> lg(wait_map_mutex());
+            std::lock_guard<std::mutex> lg(bucket.mtx);
             if (--ws->waiters == 0) {
-                wait_map().erase(key);
+                bucket.map.erase(key);
             }
         }
     }
@@ -95,11 +100,12 @@ namespace sgcl::detail {
     template<class Atomic>
     void atomic_notify_one(Atomic& a) noexcept {
         void* key = const_cast<void*>(static_cast<const void*>(&a));
+        auto& bucket = wait_bucket_for(key);
         std::shared_ptr<wait_state> ws;
         {
-            std::lock_guard<std::mutex> lg(wait_map_mutex());
-            auto it = wait_map().find(key);
-            if (it == wait_map().end()) return;
+            std::lock_guard<std::mutex> lg(bucket.mtx);
+            auto it = bucket.map.find(key);
+            if (it == bucket.map.end()) return;
             ws = it->second;
         }
         ws->cv.notify_one();
@@ -108,11 +114,12 @@ namespace sgcl::detail {
     template<class Atomic>
     void atomic_notify_all(Atomic& a) noexcept {
         void* key = const_cast<void*>(static_cast<const void*>(&a));
+        auto& bucket = wait_bucket_for(key);
         std::shared_ptr<wait_state> ws;
         {
-            std::lock_guard<std::mutex> lg(wait_map_mutex());
-            auto it = wait_map().find(key);
-            if (it == wait_map().end()) return;
+            std::lock_guard<std::mutex> lg(bucket.mtx);
+            auto it = bucket.map.find(key);
+            if (it == bucket.map.end()) return;
             ws = it->second;
         }
         ws->cv.notify_all();
